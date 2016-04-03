@@ -4,7 +4,7 @@
 
 int main() {
 
-using namespace falcon;
+using namespace falcon::ctmatch;
 
 //using namespace detail_::match;
 
@@ -31,6 +31,9 @@ match_invoke(
 | [](int *) { std::cout << "pointer\n"; }
 | [](int) { std::cout << "int\n"; }
 | [](auto&&) { std::cout << "unknown\n"; }
+// | []() -> void_t<is_pointer<T>> { std::cout << "unknown\n"; }
 ;
+
+3 >>= match | match_always | match_error;
 
 }

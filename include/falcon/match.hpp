@@ -2,10 +2,11 @@
 #define FALCON_MATCH_HPP
 
 #include <utility>
+#include <tuple>
 
 namespace falcon {
 
-namespace detail_ { namespace match { namespace {
+namespace detail_ { namespace ctmatch { namespace {
 
 template<class Cond = void, class F = void>
 struct match_case
@@ -46,114 +47,143 @@ struct match_case<void, void>
 };
 
 
+struct match_value
+{
+  template<class T>
+  auto operator()(T const & x) const {
+    return match_case<>([&x](auto const & y) -> decltype(x == y) { return x == y; });
+  }
+
+  template<class T, class F>
+  auto operator()(T const & x, F && f) const {
+    return match_case<>([&x](auto const & y) -> decltype(x == y) { return x == y; }, std::forward<F>(f));
+  }
+};
+
+
+struct match_error
+{
+  template<class T>
+  void operator()(T const & type_error) const {
+    struct match_error_invocation {} is_not_invokable_with = type_error;
+  }
+};
+
+
+struct match_always
+{
+  template<class T>
+  void operator()(T const &) const {
+  }
+};
+
+
 template<class T>
 void match_invoke(T const &) {
 }
 
 template<class T, class M, class... Ms>
-void match_invoke(T && x, M const & m, Ms const & ... ms);
+decltype(auto) match_invoke(T && x, M const & m, Ms const & ... ms);
 
 
-template<class T, class Cond, class F>
-auto match_case_invoke(int, T && x, match_case<Cond, F> const & mc)
+template<class M, class T>
+auto case_invoke(M const & mc, T && x, int)
 -> decltype(mc(std::forward<T>(x))) {
   return mc(std::forward<T>(x));
 }
 
-template<class T, class Cond, class F>
-decltype(auto) match_case_invoke(char, T &&, match_case<Cond, F> const & mc) {
+template<class Cond, class F, class T>
+auto case_invoke(match_case<Cond, F> const & mc, T &&, char)
+-> decltype(mc()) {
   return mc();
 }
 
 
-template<class T, class Cond, class F, class... Ms>
-void match_m0_invoke(bool b, T && x, match_case<Cond, F> const & mc, Ms const & ... ms) {
-  if (b) {
-    match_case_invoke(1, std::forward<T>(x), mc);
-  }
-  else {
-    match_invoke(std::forward<T>(x), ms...);
-  }
-}
-
 template<class T, class M, class... Ms>
 void match_m0_invoke(bool b, T && x, M const & m, Ms const & ... ms) {
   if (b) {
-    m(std::forward<T>(x));
+    case_invoke(m, std::forward<T>(x), 1);
   }
   else {
     match_invoke(std::forward<T>(x), ms...);
   }
 }
 
-
 template<class T, class M, class... Ms>
 decltype(auto) match_m0_invoke(std::true_type, T && x, M const & m, Ms const & ...) {
-  return m(std::forward<T>(x));
+  return case_invoke(m, std::forward<T>(x), 1);
 }
-
-template<class T, class Cond, class F, class... Ms>
-auto match_m0_invoke(std::true_type, T && x, match_case<Cond, F> const & mc, Ms const & ...) {
-  return match_case_invoke(1, std::forward<T>(x), mc);
-}
-
 
 template<class T, class M, class... Ms>
-void match_m0_invoke(std::false_type, T && x, M const &, Ms const & ... ms) {
-  match_invoke(x, ms...);
+decltype(auto) match_m0_invoke(std::false_type, T && x, M const &, Ms const & ... ms) {
+  return match_invoke(x, ms...);
 }
 
 
 template<class T, class Cond, class F>
-auto is_case_invokable(T const & x, match_case<Cond, F> const & mc)
--> decltype(mc.cond(x)) {
+auto is_invokable(T && x, match_case<Cond, F> const & mc, int)
+-> decltype(case_invoke(mc, std::forward<T>(x), 1), mc.cond(x)) {
   return mc.cond(x);
 }
 
-template<class... Ts>
-std::false_type is_case_invokable(Ts const & ...) {
-  return {};
-}
-
-template<class T, class Cond, class F>
-auto is_invokable(T && x, match_case<Cond, F> const & mc) {
-  return is_case_invokable(x, mc);
-}
-
 template<class T, class F>
-auto is_invokable(T && x, F const & fn)
--> decltype(fn(std::forward<T>(x)), std::true_type{}) {
+auto is_invokable(T && x, F const & fn, char)
+-> decltype(case_invoke(fn, std::forward<T>(x), 1), std::true_type{}) {
   return {};
 }
 
-template<class... Ts>
-std::false_type is_invokable(Ts const & ...) {
+inline std::false_type is_invokable(...) {
   return {};
 }
 
 template<class T, class M, class... Ms>
-void match_invoke(T && x, M const & m, Ms const & ... ms) {
-  match_m0_invoke(is_invokable(x, m), std::forward<T>(x), m, ms...);
+decltype(auto) match_invoke(T && x, M const & m, Ms const & ... ms) {
+  return match_m0_invoke(is_invokable(std::forward<T>(x), m, 1), std::forward<T>(x), m, ms...);
+}
+
+
+template<class Int, std::size_t... Ints, class Tuple, class F>
+decltype(auto) tuple_apply(std::integer_sequence<Int, Ints...>, Tuple & t, F f) {
+  return f(std::get<Ints>(t)...);
+}
+
+template<class Tuple, class F>
+decltype(auto) tuple_apply(Tuple & t, F f) {
+  return tuple_apply(std::make_index_sequence<std::tuple_size<Tuple>{}>{}, t, f);
 }
 
 
 template<class... Cs>
-struct match : private Cs...
+struct match
 {
   template<class... C>
   constexpr match(C && ... c)
-  : Cs(std::forward<C>(c))...
+  : t(std::forward<C>(c)...)
   {}
 
   template<class C>
   match<Cs..., C> operator|(C && c) {
-    return {static_cast<Cs&&>(*this)..., std::forward<C>(c)};
+    return tuple_apply(t, [&c](Cs & ... cases) {
+      return match<Cs..., C>{
+        std::move(cases)
+#ifndef IN_IDE_PARSER
+      ...
+#endif
+      , std::forward<C>(c)
+      };
+    });
   }
 
   template<class T>
-  void operator()(T && x) const {
-    return match_invoke(std::forward<T>(x), static_cast<Cs const &>(*this)...);
+  decltype(auto) operator()(T && x) const {
+    return tuple_apply(t, [&x](Cs const & ... cases) {
+      match_invoke(std::forward<T>(x), cases...);
+    });
   }
+
+private:
+  // TODO fast_tuple
+  std::tuple<Cs...> t;
 };
 
 template<>
@@ -174,26 +204,29 @@ void operator>>=(T && x, match<C...> const & m) {
   return m(std::forward<T>(x));
 }
 
-} } }
+} } } // detail_
 
 
-struct match_invoke_fn
+namespace ctmatch
 {
-  template<class T, class... M>
-  void operator()(T && x, M && ... m) const {
-    detail_::match::match_invoke(std::forward<T>(x), m...);
+  using detail_::ctmatch::match_invoke;
+
+  using match_value_fn = detail_::ctmatch::match_value;
+  using match_case_fn = detail_::ctmatch::match_case<>;
+  using match_error_fn = detail_::ctmatch::match_error;
+  using match_always_fn = detail_::ctmatch::match_always;
+
+  using match_fn = detail_::ctmatch::match<>;
+
+  namespace {
+    constexpr match_value_fn match_value = {};
+    constexpr match_case_fn match_case = {};
+    constexpr match_error_fn match_error = {};
+    constexpr match_always_fn match_always = {};
+
+    constexpr match_fn match = {};
   }
-};
-
-struct match_case_fn : detail_::match::match_case<> {};
-
-using match_fn = detail_::match::match<>;
-
-namespace {
-  constexpr match_invoke_fn match_invoke = {};
-  constexpr match_case_fn match_case = {};
-  constexpr match_fn match = {};
-}
+} // ctmatch
 
 }
 
