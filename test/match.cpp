@@ -13,7 +13,7 @@ match_invoke(
 , match_case([](int*){ return false; }, [](int*) { std::cout << "c pointer\n"; })
 , match_case([](auto){ return true; }) >> []() { std::cout << "c int\n"; }
 , [](int *) { std::cout << "pointer\n"; }
-, [](int) { std::cout << "int\n"; }
+, [](int) { std::cout << "int\n"; return 1; }
 , [](auto&&) { std::cout << "unknown\n"; }
 );
 

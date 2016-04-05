@@ -45,6 +45,7 @@ namespace falcon {
 namespace detail_ { namespace ctmatch { namespace {
 
 class unspecified_result_type {};
+class common_result_type {};
 
 template<class Cond, class F = void>
 struct match_case
@@ -79,39 +80,168 @@ template<class R, class T, class M, class... Ms>
 decltype(auto) match_invoke(R*, T x, M const & m, Ms const & ... ms);
 
 
-template<class R, class M, class T>
-auto case_invoke(R*, M const & mc, T x, int)
+template<class M, class T>
+auto case_invoke(M const & mc, T x, int)
 -> decltype(mc(x.get())) {
   return mc(x.get());
 }
 
-template<class R, class Cond, class F, class T>
-auto case_invoke(R*, match_case<Cond, F> const & mc, T, char)
+template<class Cond, class F, class T>
+auto case_invoke(match_case<Cond, F> const & mc, T, char)
 -> decltype(mc()) {
   return mc();
 }
 
 
+// @{
+// TODO Falcon.Traits
+template<class...> using void_t = void;
+template<class T> using t_ = typename T::type;
+
+template<class TT, class Default, class = void>
+struct eval_or_type
+{ using type = Default; };
+// @}
+
+
+template<class R, class T, class U>
+struct match_result
+{ using type = void; };
+
+template<class R, class T>
+struct match_result<R, T, T>
+{ using type = R; };
+
+template<class T>
+struct match_result<unspecified_result_type, T, T>
+{ using type = T; };
+
+template<class TT, class Default>
+struct eval_or_type<TT, Default, void_t<t_<TT>>>
+{ using type = t_<TT>; };
+
+template<class T, class U>
+struct match_result<common_result_type, T, U>
+: eval_or_type<std::common_type<T, U>, void>
+{};
+
+
+template<class Tag, class T, class U>
+struct match_common_result_impl;
+
+template<class T, class U>
+struct match_common_result_impl<common_result_type, T, U>
+: std::common_type<T, U>
+{};
+
+template<class T>
+struct match_common_result_impl<unspecified_result_type, T, T>
+{ using type = T; };
+
+
+template<class Tag, class R, class T, class... Ms>
+struct match_invoke_result;
+
+template<class Tag, class R, class T, class M, class... Ms>
+struct match_invoke_result<Tag, R, T, M, Ms...>
+: match_invoke_result<Tag, t_<match_common_result_impl<
+  Tag,
+  R,
+  decltype(case_invoke(std::declval<M>(), std::declval<T>(), 1))
+>>, T, Ms...>
+{};
+
+template<class Tag, class R, class T, class... Ms>
+struct match_invoke_result<Tag, R, T, void, Ms...>
+: match_invoke_result<Tag, R, T, Ms...>
+{};
+
+template<class Tag, class R, class T>
+struct match_invoke_result<Tag, R, T>
+{ using type = R; };
+
+
+
+struct match_m0_invoke_void
+{
+  template<class R, class T, class M, class... Ms>
+  static void impl(
+    R* r, bool b, T x, M const & m, Ms const & ... ms
+  ) {
+    if (b) {
+      case_invoke(m, x, 1);
+    }
+    else {
+      match_invoke(r, x, ms...);
+    }
+  }
+};
+
+template<class Rs>
+struct match_m0_invoke_with_result
+{
+  template<class R, class T, class M, class... Ms>
+  static Rs impl(
+    R* r, bool b, T x, M const & m, Ms const & ... ms
+  ) {
+    if (b) {
+      return case_invoke(m, x, 1);
+    }
+    else {
+      return match_invoke(r, x, ms...);
+    }
+  }
+};
+
+
+template<class R, class Rs1, class Rs2, class = void>
+struct match_m0_invoke_impl
+: match_m0_invoke_void
+{};
+
+template<class R, class Rs1, class Rs2>
+struct match_m0_invoke_impl<
+  R, Rs1, Rs2,
+  std::enable_if_t<
+    std::is_convertible<std::common_type_t<Rs1, Rs2>, R>::value
+  >
+>
+: match_m0_invoke_with_result<std::common_type_t<Rs1, Rs2>>
+{};
+
+template<class Rs>
+struct match_m0_invoke_impl<unspecified_result_type, Rs, Rs, void>
+: match_m0_invoke_with_result<Rs>
+{};
+
+template<class Rs1, class Rs2>
+struct match_m0_invoke_impl<
+  common_result_type, Rs1, Rs2,
+  void_t<std::common_type_t<Rs1, Rs2>>
+> : match_m0_invoke_with_result<std::common_type_t<Rs1, Rs2>>
+{};
+
+
 template<class R, class T, class M, class... Ms>
-void match_m0_invoke(R r, bool b, T x, M const & m, Ms const & ... ms) {
-  if (b) {
-    return case_invoke(r, m, x, 1);
-  }
-  else {
-    return match_invoke(r, x, ms...);
-  }
+decltype(auto)
+match_m0_invoke(R*, std::true_type, T x, M const & m, Ms const & ...) {
+  return case_invoke(m, x, 1);
 }
 
 template<class R, class T, class M, class... Ms>
 decltype(auto)
-match_m0_invoke(R r, std::true_type, T x, M const & m, Ms const & ...) {
-  return case_invoke(r, m, x, 1);
-}
-
-template<class R, class T, class M, class... Ms>
-decltype(auto)
-match_m0_invoke(R r, std::false_type, T x, M const &, Ms const & ... ms) {
+match_m0_invoke(R* r, std::false_type, T x, M const &, Ms const & ... ms) {
   return match_invoke(r, x, ms...);
+}
+
+template<class R, class T, class M, class... Ms>
+decltype(auto)
+match_m0_invoke(R* r, bool b, T x, M const & m, Ms const & ... ms) {
+  return match_m0_invoke_impl<
+    R,
+    decltype(case_invoke(m, x, 1)),
+    decltype(match_invoke(r, x, ms...))
+  >::impl(r, b, x, m, ms...);
 }
 
 
@@ -186,7 +316,8 @@ private:
 
 
 template<class T, class R, class... C>
-R operator>>=(T && x, match<R, C...> const & m) {
+auto operator>>=(T && x, match<R, C...> const & m)
+-> decltype(m(std::forward<T>(x))) {
   return m(std::forward<T>(x));
 }
 
@@ -233,9 +364,7 @@ namespace ctmatch
     }
   };
 
-  // TODO
-  //using unspecified_result_type = detail_::ctmatch::unspecified_result_type;
-  using unspecified_result_type = void;
+  using unspecified_result_type = detail_::ctmatch::unspecified_result_type;
 
   template<class R = unspecified_result_type, class T, class... Cases>
   decltype(auto) match_invoke(T && x, Cases const & ... cases) {
