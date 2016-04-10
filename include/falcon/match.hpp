@@ -99,14 +99,14 @@ namespace falcon {
  */
 /// \brief Invoke the callable object f with the Ith elements from the tuple of arguments.
 template<class TInt, std::size_t... I, class F, class Tuple>
-decltype(auto) apply(std::integer_sequence<TInt, I...>, F && f, Tuple && t) {
+constexpr decltype(auto) apply(std::integer_sequence<TInt, I...>, F && f, Tuple && t) {
   // TODO falcon::invoke
   return std::forward<F>(f)(std::get<I>(std::forward<Tuple>(t))...);
 }
 
 /// \brief Invoke the Callable object f with a tuple of arguments.
 template<class F, class Tuple>
-decltype(auto) apply(F && f, Tuple && t) {
+constexpr decltype(auto) apply(F && f, Tuple && t) {
   return apply(
     std::make_index_sequence<std::tuple_size<std::decay_t<Tuple>>{}>{}
   , std::forward<F>(f), std::forward<Tuple>(t)
@@ -127,15 +127,17 @@ namespace detail_ {
 
   template<class T> struct pmatch;
 
-  template<class R, class T> R match_invoke(R*, T const &) {}
+  template<class R, class T> void match_invoke(R*, T const &) {}
 
   template<class R, class T, class M, class... Ms>
-  decltype(auto) match_invoke(R*, T x, M const & m, Ms const & ... ms);
+  constexpr decltype(auto) match_invoke(R*, T x, M const & m, Ms const & ... ms);
 
   template<class T> std::false_type pmatch_invoke(T const &) { return {}; }
 
   template<class T, class Fn, class... Fns>
   decltype(auto) pmatch_invoke(T x, Fn fn, Fns... fns);
+
+  template<class T> struct eq;
 } // detail_
 
 
@@ -155,13 +157,14 @@ auto pmatch_invoke(T && x, Fns && ... fns) {
 }
 
 /**
- * \brief Wraps \c pmatch_invoke with operator| to add a function.
+ * \brief Wraps pmatch_invoke() with operator| to add a function.
  *
- * \example
+ * \code
  * pmatch(x)
  * | [](int &) { ... }
  * | [](auto && x, std:enable_if_t< is_pointer< decltype(x) >::value >* = {}) { ... }
  * | ...
+ * \endcode
  */
 template<class T>
 detail_::pmatch<forwarder<T>>
@@ -205,7 +208,7 @@ struct match_always_fn
  * \tparam ResultType can be unspecified_result_type, common_result_type or any type
  */
 template<class ResultType = unspecified_result_type, class T, class... Cases>
-decltype(auto) match_invoke(T && x, Cases const & ... cases) {
+constexpr decltype(auto) match_invoke(T && x, Cases const & ... cases) {
   return detail_::match_invoke(
     static_cast<ResultType*>(nullptr),
     forwarder<T>{x},
@@ -217,7 +220,7 @@ decltype(auto) match_invoke(T && x, Cases const & ... cases) {
 /**
  * \brief Wraps \c match_invoke with operator| to add a function.
  *
- * \example
+ * \code
  * x >>= match//.result<ResultType>() or common_result()
  * | match_if([](auto const & x) { return bool(x); }) >> []{ ... }
  * | match_if([](auto const & x) { return std::is_pointer< decltype(x)>{}; }) >> []{ ... }
@@ -228,16 +231,18 @@ decltype(auto) match_invoke(T && x, Cases const & ... cases) {
  * | [](auto && any) { ... } // always true, the following are ignored
  * | match_always // always true, the following are ignored
  * | match_error // added by match (not with nmatch)
- *
+ * \endcode
+ * \code
  * (match//.result<ResultType>() or common_result()
  * | cases | ...
  * )(x)
+ * \endcode
  */
 template<bool CheckMismatch>
 struct match_fn
 {
   template<class C>
-  detail_::match<CheckMismatch, unspecified_result_type, C>
+  constexpr detail_::match<CheckMismatch, unspecified_result_type, std::decay_t<C>>
   operator|(C && c) const {
     return {std::forward<C>(c)};
   }
@@ -253,13 +258,13 @@ struct match_fn
    * \tparam ResultType can be unspecified_result_type, common_result_type or any type
    */
   template<class ResultType>
-  detail_::match<CheckMismatch, ResultType>
+  constexpr detail_::match<CheckMismatch, ResultType>
   result() const {
     return {};
   }
 
   /// \brief The result type is the common type.
-  detail_::match<CheckMismatch, common_result_type>
+  constexpr detail_::match<CheckMismatch, common_result_type>
   common_result() const {
     return {};
   }
@@ -268,30 +273,34 @@ struct match_fn
 
 /// \brief Condtional match.
 template<class Pred>
-detail_::match_if<Pred>
-match_if(Pred && pred) {
+detail_::match_if<std::decay_t<Pred>>
+constexpr match_if(Pred && pred) {
   return {std::forward<Pred>(pred)};
 }
 
 /// \brief Condtional match.
 template<class Pred, class F>
-detail_::match_if<Pred, F>
-match_if(Pred && pred, F && f) {
+detail_::match_if<std::decay_t<Pred>, std::decay_t<F>>
+constexpr match_if(Pred && pred, F && f) {
   return {std::forward<Pred>(pred), std::forward<F>(f)};
 }
 
 
-/// \brief Condtional match on value.
+/**
+ * \brief Condtional match on value.
+ */
 template<class T>
-auto match_value(T const & x) {
-  //return match_if(la::ref(x) == la::arg1);
-  return match_if([&x](auto const & y) -> decltype(x == y) { return x == y; });
+constexpr auto match_value(T && x) {
+  //return match_if(la::val(x) == la::arg1);
+  return match_if(detail_::eq<std::decay_t<T>>{x});
 }
 
-/// \brief Condtional match on value.
+/**
+ * \brief Condtional match on value.
+ */
 template<class T, class F>
-auto match_value(T const & x, F && f) {
-  return match_if([&x](auto const & y) -> decltype(x == y) { return x == y; }, std::forward<F>(f));
+constexpr auto match_value(T && x, F && f) {
+  return match_if(detail_::eq<std::decay_t<T>>{x}, std::forward<F>(f));
 }
 
 
@@ -314,41 +323,55 @@ namespace {
 
 namespace detail_ {
 
+template<class T>
+struct eq
+{
+  T x_;
+
+  template<class U>
+  auto operator()(U const & y) const
+  noexcept(noexcept(x_ == y))
+  -> decltype(x_ == y)
+  {
+    return x_ == y;
+  }
+};
+
 template<class Pred, class F>
 struct match_if
 {
-  Pred pred;
-  F f;
-
-  template<class... T>
-  auto operator()(T && ... x) const
-  -> decltype(f(std::forward<T>(x)...)) {
-    return f(std::forward<T>(x)...);
-  }
+  Pred pred_;
+  F fn_;
 };
 
 template<class Pred>
 struct match_if<Pred, void>
 {
-  Pred pred;
+  Pred pred_;
 
   template<class F>
-  match_if<Pred, F> operator>>(F && f) const {
-    return {std::move(pred), std::forward<F>(f)};
+  constexpr match_if<Pred, std::decay_t<F>> operator>>(F && f) {
+    return {std::move(pred_), std::forward<F>(f)};
   }
 };
 
 
 template<class M, class T>
-auto case_invoke(M const & mc, T x, int)
+constexpr auto case_invoke(int, M const & mc, T x)
 -> decltype(mc(x.get())) {
   return mc(x.get());
 }
 
 template<class Pred, class F, class T>
-auto case_invoke(match_if<Pred, F> const & mc, T, char)
--> decltype(mc()) {
-  return mc();
+constexpr auto case_invoke(int, match_if<Pred, F> const & mc, T x)
+-> decltype(mc.fn_(x.get())) {
+  return mc.fn_(x.get());
+}
+
+template<class Pred, class F, class T>
+constexpr auto case_invoke(char, match_if<Pred, F> const & mc, T)
+-> decltype(mc.fn_()) {
+  return mc.fn_();
 }
 
 
@@ -359,7 +382,7 @@ struct match_m0_invoke_void
     R* r, bool b, T x, M const & m, Ms const & ... ms
   ) {
     if (b) {
-      case_invoke(m, x, 1);
+      case_invoke(1, m, x);
     }
     else {
       match_invoke(r, x, ms...);
@@ -371,11 +394,11 @@ template<class Rs>
 struct match_m0_invoke_with_result
 {
   template<class R, class T, class M, class... Ms>
-  static Rs impl(
+  constexpr static Rs impl(
     R* r, bool b, T x, M const & m, Ms const & ... ms
   ) {
     if (b) {
-      return case_invoke(m, x, 1);
+      return case_invoke(1, m, x);
     }
     else {
       return match_invoke(r, x, ms...);
@@ -405,6 +428,11 @@ struct match_m0_invoke_impl<unspecified_result_type, Rs, Rs, void>
 {};
 
 template<class Rs1, class Rs2>
+struct match_m0_invoke_impl<unspecified_result_type, Rs1, Rs2, void>
+: match_m0_invoke_void
+{};
+
+template<class Rs1, class Rs2>
 struct match_m0_invoke_impl<
   common_result_type, Rs1, Rs2,
   void_t<std::common_type_t<Rs1, Rs2>>
@@ -417,48 +445,69 @@ struct match_m0_invoke_impl<void, Rs1, Rs2, void>
 {};
 
 
-template<class R, class T, class M, class... Ms>
-decltype(auto)
-match_m0_invoke(R*, std::true_type, T x, M const & m, Ms const & ...) {
-  return case_invoke(m, x, 1);
+template<class T, class M, class... Ms>
+constexpr decltype(auto)
+match_m0_invoke(
+  unspecified_result_type*, std::true_type, T x, M const & m, Ms const & ...
+) {
+  return case_invoke(1, m, x);
+}
+
+template<class T, class M, class... Ms>
+constexpr decltype(auto)
+match_m0_invoke(
+  common_result_type*, std::true_type, T x, M const & m, Ms const & ...
+) {
+  return case_invoke(1, m, x);
 }
 
 template<class R, class T, class M, class... Ms>
-decltype(auto)
+constexpr R match_m0_invoke(R*, std::true_type, T x, M const & m, Ms const & ...) {
+  return case_invoke(1, m, x);
+}
+
+template<class R, class T, class M, class... Ms>
+constexpr decltype(auto)
 match_m0_invoke(R* r, std::false_type, T x, M const &, Ms const & ... ms) {
   return match_invoke(r, x, ms...);
 }
 
 template<class R, class T, class M, class... Ms>
-decltype(auto)
+constexpr decltype(auto)
 match_m0_invoke(R* r, bool b, T x, M const & m, Ms const & ... ms) {
   return match_m0_invoke_impl<
     R,
-    decltype(case_invoke(m, x, 1)),
+    decltype(case_invoke(1, m, x)),
     decltype(match_invoke(r, x, ms...))
   >::impl(r, b, x, m, ms...);
 }
 
 
-template<class T, class Pred, class F>
-auto is_invokable(T x, match_if<Pred, F> const & mc, int)
--> decltype(case_invoke(mc, x, 1), mc.cond(x.cref())) {
-  return mc.cond(x.cref());
+template<class Pred, class F, class T>
+auto is_invokable(int, match_if<Pred, F> const & mc, T x)
+-> decltype(void(case_invoke(1, mc, x)), mc.pred_(x.cref())) {
+  return mc.pred_(x.cref());
 }
 
-template<class T, class F>
-auto is_invokable(T x, F const & fn, char)
--> decltype(case_invoke(fn, x, 1), std::true_type{}) {
+template<class Pred, class F, class T>
+std::false_type is_invokable(char, match_if<Pred, F> const &, T) {
   return {};
 }
 
-inline std::false_type is_invokable(...) {
+template<class F, class T>
+constexpr auto is_invokable(char, F const & fn, T x)
+-> decltype(void(case_invoke(1, fn, x)), std::true_type{}) {
+  (void)x; // GCC
+  return {};
+}
+
+constexpr inline std::false_type is_invokable(...) {
   return {};
 }
 
 template<class R, class T, class M, class... Ms>
-decltype(auto) match_invoke(R* r, T x, M const & m, Ms const & ... ms) {
-  return match_m0_invoke(r, is_invokable(x, m, 1), x, m, ms...);
+constexpr decltype(auto) match_invoke(R* r, T x, M const & m, Ms const & ... ms) {
+  return match_m0_invoke(r, is_invokable(1, m, x), x, m, ms...);
 }
 
 
@@ -471,9 +520,9 @@ struct match
   {}
 
   template<class C>
-  constexpr match<CheckMismatch, R, Cs..., C> operator|(C && c) {
+  constexpr match<CheckMismatch, R, Cs..., std::decay_t<C>> operator|(C && c) {
     return apply([&c](Cs & ... cases) {
-      return match<CheckMismatch, R, Cs..., C>{
+      return match<CheckMismatch, R, Cs..., std::decay_t<C>>{
         std::move(cases)
 #ifndef IN_IDE_PARSER
       ...
@@ -488,7 +537,8 @@ struct match
     return apply([&x](Cs const & ... cases) {
       return match_invoke(
         static_cast<R*>(nullptr)
-      , forwarder<T>{x}, cases
+      , forwarder<T>{x}
+      , cases
 #ifndef IN_IDE_PARSER
       ...
 #endif
@@ -503,7 +553,7 @@ private:
 };
 
 template<class T, bool CheckMismatch, class R, class... C>
-auto operator>>=(T && x, match<CheckMismatch, R, C...> const & m)
+constexpr auto operator>>=(T && x, match<CheckMismatch, R, C...> const & m)
 -> decltype(m(std::forward<T>(x))) {
   return m(std::forward<T>(x));
 }
@@ -512,12 +562,9 @@ auto operator>>=(T && x, match<CheckMismatch, R, C...> const & m)
 struct pmatch_nil
 {
   template<class C>
-  pmatch_nil operator|(C &&) const && noexcept {
+  pmatch_nil operator|(C &&) && noexcept {
     return {};
   }
-
-  template<class C>
-  void operator|(C && c) const & = delete;
 
   std::true_type is_invoked() const noexcept {
     return {};
@@ -536,47 +583,44 @@ struct pmatch
   : x(x)
   {}
 
-  pmatch(pmatch const &) = delete;
-  pmatch & operator = (pmatch const &) = delete;
-
   template<class C>
-  auto operator|(C && c) const && {
-    return invokable_case(forwarder<C>{c});
+  auto operator|(C && c) && {
+    return invokable_case(1, forwarder<C>{c});
   }
-
-  template<class C>
-  void operator|(C && c) const & = delete;
 
   std::false_type is_invoked() const noexcept {
     return {};
   }
 
 private:
+  pmatch(pmatch const &) = default;
+  pmatch & operator = (pmatch const &) = delete;
+
+  T x;
+
   template<class C>
-  auto invokable_case(C c, int) const
-  -> decltype(void(c(std::declval<T>().get())), pmatch_nil{}) {
-    c(x.get());
+  auto invokable_case(int, C c) const
+  -> decltype(void(c.get()(x.get())), pmatch_nil{}) {
+    c.get()(x.get());
     return {};
   }
 
   template<class C>
-  pmatch invokable_case(C, char) noexcept {
+  pmatch invokable_case(char, C) const noexcept {
     return *this;
   }
-
-  T x;
 };
 
 
 template<class T, class F, class... Fs>
 auto pmatch_invoke_case(int, T x, F fn, Fs...)
--> decltype(void(fn(x.get())), std::true_type{}) {
-  fn(x.get());
+-> decltype(void(fn.get()(x.get())), std::true_type{}) {
+  fn.get()(x.get());
   return {};
 }
 
 template<class T, class Fn, class... Fns>
-auto pmatch_invoke_case(int, T x, Fn, Fns... fns) {
+auto pmatch_invoke_case(char, T x, Fn, Fns... fns) {
   return pmatch_invoke(x, fns...);
 }
 

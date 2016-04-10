@@ -1,48 +1,69 @@
 #include <falcon/match.hpp>
 
 #include <iostream>
+#include <type_traits>
+
+template<int i> struct i_ : std::integral_constant<bool, bool(i)> {};
+
+template<class T, int i> struct Fi { i_<i> operator()(T) const { return {}; } };
+
+template<class T> struct type_ {
+  template<class U>
+  std::enable_if_t<std::is_same<std::decay_t<U>, T>::value, std::true_type>
+  operator()(U const &) const { return {}; }
+};
 
 int main() {
 
 using namespace falcon::ctmatch;
 
-//using namespace detail_::match;
+i_<1> a;
+i_<2> b;
 
-match_invoke(
-  3
-, match_if([](int*){ return false; }, [](int*) { std::cout << "c pointer\n"; })
-, match_if([](auto){ return true; }) >> []() { std::cout << "c int\n"; }
-, [](int *) { std::cout << "pointer\n"; }
-, [](int) { std::cout << "int\n"; return 1; }
-, [](auto&&) { std::cout << "unknown\n"; }
+Fi<int, 1> fa;
+Fi<int, 2> fb;
+
+type_<int> only_int;
+type_<bool> only_bool;
+
+std::true_type true_;
+std::false_type false_;
+
+auto dyn_error = [](auto &&) { throw 1; };
+
+a = match_invoke(1, fa);
+a = match_invoke(1, match_if(fa, fa));
+a = match_invoke(1, match_if(fa) >> fa);
+match_invoke(1, match_value(1, fa), dyn_error);
+match_invoke(1, match_value(1) >> fa, dyn_error);
+
+b = match_invoke(1, match_if(only_bool, fa), match_if(only_int, fb));
+b = match_invoke(1, match_if(only_bool) >> fa, match_if(only_int) >> fb);
+
+b = 1 >>= match
+| match_if(only_bool) >> fa
+| match_if(only_int) >> fb
+;
+
+3 >>= match | match_always;
+true_ = 3 >>= match | only_int;
+
+only_bool(
+  1 >>= match.result<bool>()
+  | match_value(only_int, []() { return 1; })
+  | match_value(only_int, []() { return 2; })
+  | [](int){ return 3; }
 );
 
-(match
-| match_if([](int*){ return false; }, [](int*) { std::cout << "c pointer\n"; })
-| match_if([](auto){ return true; }) >> []() { std::cout << "c int\n"; }
-| [](int *) { std::cout << "pointer\n"; }
-| [](int) { std::cout << "int\n"; }
-| [](auto&&) { std::cout << "unknown\n"; }
-)(3);
-
-3 >>= match//.result<int>()
-| match_if([](int*){ return false; }, [](int*) { std::cout << "c pointer\n"; })
-| match_if([](auto){ return true; }) >> []() { std::cout << "c int\n"; }
-| [](int *) { std::cout << "pointer\n"; }
-| [](int) { std::cout << "int\n"; }
-| [](auto&&) { std::cout << "unknown\n"; }
-// | []() -> void_t<is_pointer<T>> { std::cout << "unknown\n"; }
-;
-
-int xx = 3 >>= match.result<int>()
-| match_if([](int*){ return false; }, [](int*) { return 1; })
-| match_if([](auto){ return true; }) >> []() { return 2u; }
-| [](int *) { return 3u; }
-| [](int) { return 4; }
-| [](auto&&) { return 5; }
-// | []() -> void_t<is_pointer<T>> { std::cout << "unknown\n"; }
-;
-
-3 >>= match | match_always | match_error;
+true_ = pmatch_invoke(1,
+  [](auto x) -> std::enable_if_t<std::is_pointer<decltype(x)>::value> {
+    static_assert(!sizeof(x), "");
+  },
+  [](int) {},
+  [](auto x) { static_assert(!sizeof(x), ""); }
+);
+true_ = (pmatch(1) | match_always | match_error).is_invoked();
+true_ = (pmatch(1) | only_bool | only_int | match_error).is_invoked();
+false_ = (pmatch(1) | only_bool).is_invoked();
 
 }

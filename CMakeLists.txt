@@ -25,8 +25,8 @@ include_directories(include/)
 
 # Tests
 function(add_executable_test name)
-  add_executable(test_${name} test/${name}.cpp)
-  add_test(match_test test_${name})
+  add_executable(${name}_test test/${name}.cpp)
+  add_test(match_test ${name}_test)
 endfunction()
 
 add_executable_test(match)
