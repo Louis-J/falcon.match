@@ -3,7 +3,10 @@
 #include <iostream>
 #include <type_traits>
 
-template<int i> struct i_ : std::integral_constant<bool, bool(i)> {};
+template<int i> struct i_ : std::integral_constant<int, i> {};
+
+class my_true_type {};
+std::true_type normalize_branch_value(my_true_type) { return {}; };
 
 template<class T, int i> struct Fi { i_<i> operator()(T) const { return {}; } };
 
@@ -34,6 +37,8 @@ auto dyn_error = [](auto &&) { throw 1; };
 a = match_invoke(1, fa);
 a = match_invoke(1, match_if(fa, fa));
 a = match_invoke(1, match_if(fa) >> fa);
+a = 1 >>= match | match_if([](int) { return my_true_type{}; }, fa);
+
 match_invoke(1, match_value(1, fa), dyn_error);
 match_invoke(1, match_value(1) >> fa, dyn_error);
 

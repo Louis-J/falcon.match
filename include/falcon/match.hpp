@@ -44,9 +44,11 @@ namespace detail_ {
 }
 
 /**
- * \brief Wraps a lvalue or a rvalue in a copyable, assignable object.
+ * \defgroup utilities Utilities
  * \ingroup utilities
+ * @{
  */
+/// \brief Wraps a lvalue or a rvalue in a copyable, assignable object.
 template<class T>
 struct forwarder : private detail_::forwarder_base<T>
 {
@@ -67,6 +69,7 @@ struct forwarder : private detail_::forwarder_base<T>
 private:
   value_type & x_;
 };
+/** @} group utilities */
 
 } // falcon
 
@@ -76,7 +79,7 @@ namespace falcon {
 
 /**
  * \defgroup metaprogramming Metaprogramming
- * \addtogroup utilities
+ * \ingroup utilities
  * @{
  */
 template<class...> using void_t = void;
@@ -94,7 +97,8 @@ template<class...> using void_t = void;
 namespace falcon {
 
 /**
- * \addtogroup utilities
+ * \defgroup tuple Tuple
+ * \ingroup utilities
  * @{
  */
 /// \brief Invoke the callable object f with the Ith elements from the tuple of arguments.
@@ -143,7 +147,7 @@ namespace detail_ {
 
 /**
  * \defgroup Matching Matching
- * \addtogroup utilities
+ * \ingroup utilities
  * @{
  */
 
@@ -505,9 +509,19 @@ constexpr inline std::false_type is_invokable(...) {
   return {};
 }
 
+template<class T, T x>
+std::integral_constant<bool, bool(x)>
+normalize_branch_value(std::integral_constant<T, x>) {
+  return {};
+}
+
+inline bool normalize_branch_value(bool x) {
+  return x;
+}
+
 template<class R, class T, class M, class... Ms>
 constexpr decltype(auto) match_invoke(R* r, T x, M const & m, Ms const & ... ms) {
-  return match_m0_invoke(r, is_invokable(1, m, x), x, m, ms...);
+  return match_m0_invoke(r, normalize_branch_value(is_invokable(1, m, x)), x, m, ms...);
 }
 
 
