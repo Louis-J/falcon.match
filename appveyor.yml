@@ -6,7 +6,7 @@ matrix:
   fast_finish: true
 
 platform:
- - x64
+  - x64
 
 configuration:
   - Debug
@@ -16,19 +16,19 @@ clone_folder: c:\projects\ctmatch
 
 build:
   parallel: false
-  project: c:\projects\ctmatch\%CONFIGURATION%\ctmatch.sln
+  project: c:\projects\ctmatch\build\ctmatch.sln
   verbosity: minimal
 
 before_build:
   - cd c:\projects\ctmatch
-  - md %CONFIGURATION%
-  - cd %CONFIGURATION%
+  - md build
+  - cd build
   - cmake -G"Visual Studio 14 2015 Win64" ..
 
 build_script:
- - cd c:\projects\ctmatch\%CONFIGURATION%
+ - cd c:\projects\ctmatch
  - msbuild /target:match_test /p:Configuration=%CONFIGURATION%;Platform=%PLATFORM% ctmatch.sln
 
 test_script:
- - cd c:\projects\ctmatch\%CONFIGURATION%
- - cmd: ctest -VV
+ - cd c:\projects\ctmatch\build
+ - cmd: ctest -C %CONFIGURATION% -VV
