@@ -6,7 +6,7 @@
 template<int i> struct i_ : std::integral_constant<int, i> {};
 
 class my_true_type {};
-std::true_type normalize_branch_value(my_true_type) { return {}; };
+std::true_type normalize_branch_value(my_true_type) { return {}; }
 
 template<class T, int i> struct Fi { i_<i> operator()(T) const { return {}; } };
 
