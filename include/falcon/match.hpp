@@ -112,7 +112,7 @@ constexpr decltype(auto) apply(std::integer_sequence<TInt, I...>, F && f, Tuple 
 template<class F, class Tuple>
 constexpr decltype(auto) apply(F && f, Tuple && t) {
   return apply(
-    std::make_index_sequence<std::tuple_size<std::decay_t<Tuple>>{}>{}
+    std::make_index_sequence<std::tuple_size<std::decay_t<Tuple>>::value>{}
   , std::forward<F>(f), std::forward<Tuple>(t)
   );
 }
@@ -534,7 +534,21 @@ struct match
   {}
 
   template<class C>
-  constexpr match<CheckMismatch, R, Cs..., std::decay_t<C>> operator|(C && c) {
+  constexpr match<CheckMismatch, R, Cs..., std::decay_t<C>> operator|(C && c) const & {
+    return apply([&c](Cs const & ... cases) {
+      return match<CheckMismatch, R, Cs..., std::decay_t<C>>{
+        cases
+#ifndef IN_IDE_PARSER
+      ...
+#endif
+      , std::forward<C>(c)
+      };
+    }, t);
+  }
+
+#ifndef _MSC_VER
+  template<class C>
+  constexpr match<CheckMismatch, R, Cs..., std::decay_t<C>> operator|(C && c) && {
     return apply([&c](Cs & ... cases) {
       return match<CheckMismatch, R, Cs..., std::decay_t<C>>{
         std::move(cases)
@@ -545,6 +559,7 @@ struct match
       };
     }, t);
   }
+#endif
 
   template<class T>
   constexpr decltype(auto) operator()(T && x) const {

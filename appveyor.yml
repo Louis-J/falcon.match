@@ -6,11 +6,11 @@ matrix:
   fast_finish: true
 
 platform:
-  - x64
+  #- x64
 
-configuration:
-  - Debug
-  - Release
+#configuration:
+  #- Debug
+  #- Release
 
 clone_folder: c:\projects\ctmatch
 
@@ -26,9 +26,11 @@ before_build:
   - cmake -G"Visual Studio 14 2015 Win64" ..
 
 build_script:
- - cd c:\projects\ctmatch
- - msbuild /target:match_test /p:Configuration=%CONFIGURATION%;Platform=%PLATFORM% ctmatch.sln
+ - cd c:\projects\ctmatch\build
+ - msbuild /target:match_test /p:Configuration=Debug;Platform=x64 ctmatch.sln
+ - msbuild /target:match_test /p:Configuration=Release;Platform=x64 ctmatch.sln
 
 test_script:
  - cd c:\projects\ctmatch\build
- - cmd: ctest -C %CONFIGURATION% -VV
+ - cmd: ctest -C Debug -VV
+ - cmd: ctest -C Release -VV
