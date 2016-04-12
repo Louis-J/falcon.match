@@ -318,6 +318,28 @@ namespace {
   /// \brief Match without check mismatch.
   constexpr match_fn<0> nmatch = {};
 }
+
+
+namespace ext {
+  /**
+   * \defgroup extension Extension
+   * \ingroup extensions
+   * @{
+   */
+  /// \brief A compile-time branchement
+  template<class T, T x>
+  std::integral_constant<bool, bool(x)>
+  normalize_branch_value(std::integral_constant<T, x>) {
+    return {};
+  }
+
+  /// \brief A runtime-time branchement
+  inline bool normalize_branch_value(bool x) {
+    return x;
+  }
+  /** @} */
+}
+
 /** @} group utilities */
 
 
@@ -509,18 +531,9 @@ constexpr inline std::false_type is_invokable(...) {
   return {};
 }
 
-template<class T, T x>
-std::integral_constant<bool, bool(x)>
-normalize_branch_value(std::integral_constant<T, x>) {
-  return {};
-}
-
-inline bool normalize_branch_value(bool x) {
-  return x;
-}
-
 template<class R, class T, class M, class... Ms>
 constexpr decltype(auto) match_invoke(R* r, T x, M const & m, Ms const & ... ms) {
+  using ext::normalize_branch_value;
   return match_m0_invoke(r, normalize_branch_value(is_invokable(1, m, x)), x, m, ms...);
 }
 

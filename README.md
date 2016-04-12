@@ -1,8 +1,8 @@
 # Falcon.CtMatch - Type matching for C++
 
-[![Build Status](https://travis-ci.org/jonathanpoelen/falcon.match.svg?branch=master)](https://travis-ci.org/jonathanpoelen/falcon.match)
+[![Build Status](https://travis-ci.org/jonathanpoelen/falcon.match.svg?branch=master)](https://travis-ci.org/jonathanpoelen/falcon.match) -- g++-5 ; clang-3.6 ; clang-3.7
 
-[![Build Status](https://ci.appveyor.com/api/projects/status/github/jonathanpoelen/falcon.match)](https://ci.appveyor.com/project/jonathanpoelen/falcon-match)
+[![Build Status](https://ci.appveyor.com/api/projects/status/github/jonathanpoelen/falcon.match)](https://ci.appveyor.com/project/jonathanpoelen/falcon-match) -- VS 2015
 
 # Goal
 
@@ -27,17 +27,17 @@ Only predicates that return a bool type create a conditional branche at runtime.
 
 ### Types categories
 
- - `Pred`: A function than returns std::true_type, std::false_type or boolean value.
+ - `Pred`: A function than returns `std::true_type`, `std::false_type` or `bool` value.
  - `Action`: A function without paramerters.
  - `Fn`: A function with one parameter.
- - `Cases`: `Fn`, `match_if()` or `match_value()`
+ - `Cases`: `Fn`, `match_if()` or `match_value()`.
  - `ResultType`: `unspecified_result_type` (by default), `common_result_type` or any type.
 
 
 ## Classes
 
- - `unspecified_result_type`: Type of invoked cases if identical. Otherwise void.
- - `common_result_type`: Common type of invoked cases. Otherwise void.
+ - `unspecified_result_type`: Type of invoked cases if identical. Otherwise `void`.
+ - `common_result_type`: Common type of invoked cases. Otherwise `void`.
 
  - `match_error_fn`: Launches a compilation time error if used.
  - `match_always_fn`: Do nothing and do it well.
@@ -52,6 +52,35 @@ Only predicates that return a bool type create a conditional branche at runtime.
 
  - `match_fn<1> match`
  - `match_fn<0> nmatch`
+
+
+## Extensions
+
+ - `ext::normalize_branch_value(user_type)`: Must return `bool` or `integral_constant<bool, x>`.
+
+```cpp
+namespace my
+{
+  template<bool> class bool_ {};
+}
+
+// normalize_branch_value support:
+
+// with adl rule
+namespace my
+{
+  std:true_type  normalize_branch_value(bool_<1>) { return {}; }
+  std:false_type normalize_branch_value(bool_<0>) { return {}; }
+}
+
+// or
+
+// with ctmatch extension
+namespace falcon { namespace ctmatch { namespace ext {
+  std:true_type  normalize_branch_value(::my::bool_<1>) { return {}; }
+  std:false_type normalize_branch_value(::my::bool_<0>) { return {}; }
+} } }
+```
 
 
 # Samples
