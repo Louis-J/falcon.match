@@ -19,9 +19,9 @@ Only predicates that return a bool type create a conditional branche at runtime.
 
  - `match_if(Pred, Action|Fn)`, `match_if(Pred) >> Action|Fn`
  - `match_value(T, Action|Fn)`, `match_value(T) >> Action|Fn`
- - `match_invoke<ResultType>(T, Fns|Cases...)`
+ - `match_invoke<ResultType>(T, Fns|Cases...)`: Returns the invoked function or `no_match_type`.
 
- - `pmatch_invoke(T, Fns...)`
+ - `pmatch_invoke(T, Fns...)`: Returns the invoked function or `no_match_type`.
  - `pmatch(T) | Fns ...`
 
 
@@ -42,6 +42,9 @@ Only predicates that return a bool type create a conditional branche at runtime.
  - `match_error_fn`: Launches a compilation time error if used.
  - `match_always_fn`: Do nothing and do it well.
 
+ - `no_match_type`: Type returned type when no match.
+ - `is_no_match<T>`: `std::true_type` or `std::false_type`.
+
  - `x >>= match_fn<bool CheckMismatch>{} | Cases ...`, `(match_fn<bool>{} | Cases ...)(x)`: If CheckMismatch = 1, `match_error_fn{}` is automatically added.
 
 
@@ -53,10 +56,13 @@ Only predicates that return a bool type create a conditional branche at runtime.
  - `match_fn<1> match`
  - `match_fn<0> nmatch`
 
+ - `is_no_match_v<T>` (since C++17): `true` or `false`.
+
 
 ## Extensions
 
  - `ext::normalize_branch_value(user_type)`: Must return `bool` or `integral_constant<bool, x>`.
+
 
 ```cpp
 namespace my
@@ -69,16 +75,16 @@ namespace my
 // with adl rule
 namespace my
 {
-  std:true_type  normalize_branch_value(bool_<1>) { return {}; }
-  std:false_type normalize_branch_value(bool_<0>) { return {}; }
+  inline std:true_type  normalize_branch_value(bool_<1>) { return {}; }
+  inline std:false_type normalize_branch_value(bool_<0>) { return {}; }
 }
 
 // or
 
 // with ctmatch extension
 namespace falcon { namespace ctmatch { namespace ext {
-  std:true_type  normalize_branch_value(::my::bool_<1>) { return {}; }
-  std:false_type normalize_branch_value(::my::bool_<0>) { return {}; }
+  inline std:true_type  normalize_branch_value(::my::bool_<1>) { return {}; }
+  inline std:false_type normalize_branch_value(::my::bool_<0>) { return {}; }
 } } }
 ```
 

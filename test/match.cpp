@@ -60,14 +60,14 @@ only_bool(
   | [](int){ return 3; }
 );
 
-true_ = pmatch_invoke(1,
+a = pmatch_invoke(1,
   [](auto x) -> std::enable_if_t<std::is_pointer<decltype(x)>::value> {
 #ifndef _MSC_VER
     static_assert(!sizeof(x), "");
 #endif
     return x; // msvc
   },
-  [](int) {},
+  [a](int) { return a; },
   [](auto x) { static_assert(!sizeof(x), ""); }
 );
 true_ = (pmatch(1) | match_always | match_error).is_invoked();

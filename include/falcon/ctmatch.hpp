@@ -23,25 +23,12 @@ SOFTWARE.
 
 #pragma once
 
+#include <type_traits>
 #include <utility>
 #include <tuple>
 
 // TODO utility/forwarder.hpp : Falcon.Forwarder
 namespace falcon {
-
-namespace detail_ {
-  template<class T>
-  struct forwarder_base {
-    using value_type = T;
-    using type = T&&;
-  };
-
-  template<class T>
-  struct forwarder_base<T&> {
-    using value_type = T;
-    using type = T&;
-  };
-}
 
 /**
  * \defgroup utilities Utilities
@@ -50,10 +37,10 @@ namespace detail_ {
  */
 /// \brief Wraps a lvalue or a rvalue in a copyable, assignable object.
 template<class T>
-struct forwarder : private detail_::forwarder_base<T>
+struct forwarder
 {
-  using value_type = typename detail_::forwarder_base<T>::value_type;
-  using type = typename detail_::forwarder_base<T>::type;
+  using value_type = std::remove_reference_t<T>;
+  using type = T&&;
 
   constexpr forwarder(value_type & x) noexcept : x_(x) {}
 
@@ -82,12 +69,9 @@ namespace falcon {
  * \ingroup utilities
  * @{
  */
-template<class...> using void_t = void;
-// template<class T> using t_ = typename T::type;
 
-// template<class TT, class Default>
-// struct eval_or_type
-// { using type = Default; };
+template<class...> using void_t = void;
+
 /** @} group utilities */
 
 } // falcon
@@ -125,18 +109,37 @@ namespace falcon {
 
 namespace ctmatch {
 
+/**
+ * \defgroup Matching Matching
+ * \ingroup utilities
+ * @{
+ */
+
+struct no_match_type {};
+
+template<class T>
+using is_no_match = typename std::is_same<T, no_match_type>::type;
+
+#if __cplusplus > 201402L
+template<class T>
+constexpr bool is_no_match_v = std::is_same<T, no_match_type>::value;
+#endif
+
+/** @} group utilities */
+
+
 namespace detail_ {
   template<class Pred, class F = void> struct match_if;
   template<bool CheckMismatch, class R, class... Cs> struct match;
 
   template<class T> struct pmatch;
 
-  template<class R, class T> void match_invoke(R*, T const &) {}
+  template<class R, class T> no_match_type match_invoke(R*, T const &) { return {}; }
 
   template<class R, class T, class M, class... Ms>
   constexpr decltype(auto) match_invoke(R*, T x, M const & m, Ms const & ... ms);
 
-  template<class T> std::false_type pmatch_invoke(T const &) { return {}; }
+  template<class T> no_match_type pmatch_invoke(T const &) { return {}; }
 
   template<class T, class Fn, class... Fns>
   decltype(auto) pmatch_invoke(T x, Fn fn, Fns... fns);
@@ -152,8 +155,8 @@ namespace detail_ {
  */
 
 /**
- * \brief Call the first function that can be.
- * \return returns std::true_type if a function is invoked, otherwise std::false_type.
+ * \brief Call the first function that can be. Otherwise do nothing.
+ * \return Returns the invoked function or \c no_match_type.
  */
 template<class T, class... Fns>
 auto pmatch_invoke(T && x, Fns && ... fns) {
@@ -207,9 +210,10 @@ struct match_always_fn
 };
 
 /**
- * \brief Uses the first invokable case.
+ * \brief Uses the first invokable case. Otherwise do nothing.
+ * \return Returns the invoked function or void.
  *
- * \tparam ResultType can be unspecified_result_type, common_result_type or any type
+ * \tparam ResultType can be unspecified_result_type, common_result_type or any type.
  */
 template<class ResultType = unspecified_result_type, class T, class... Cases>
 constexpr decltype(auto) match_invoke(T && x, Cases const & ... cases) {
@@ -326,12 +330,20 @@ namespace ext {
    * \ingroup extensions
    * @{
    */
-  /// \brief A compile-time branchement
+  /**
+   * \brief A compile-time branchement
+   * @{
+   */
   template<class T, T x>
   std::integral_constant<bool, bool(x)>
   normalize_branch_value(std::integral_constant<T, x>) {
     return {};
   }
+
+  inline std::false_type normalize_branch_value(no_match_type) {
+    return {};
+  }
+  /** @} */
 
   /// \brief A runtime-time branchement
   inline bool normalize_branch_value(bool x) {
@@ -349,6 +361,7 @@ namespace ext {
 
 namespace detail_ {
 
+
 template<class T>
 struct eq
 {
@@ -357,8 +370,7 @@ struct eq
   template<class U>
   auto operator()(U const & y) const
   noexcept(noexcept(x_ == y))
-  -> decltype(x_ == y)
-  {
+  -> decltype(x_ == y) {
     return x_ == y;
   }
 };
@@ -656,13 +668,12 @@ private:
 
 template<class T, class F, class... Fs>
 auto pmatch_invoke_case(int, T x, F fn, Fs...)
--> decltype(void(fn.get()(x.get())), std::true_type{}) {
-  fn.get()(x.get());
-  return {};
+-> decltype(fn.get()(x.get())) {
+  return fn.get()(x.get());
 }
 
 template<class T, class Fn, class... Fns>
-auto pmatch_invoke_case(char, T x, Fn, Fns... fns) {
+decltype(auto) pmatch_invoke_case(char, T x, Fn, Fns... fns) {
   return pmatch_invoke(x, fns...);
 }
 
