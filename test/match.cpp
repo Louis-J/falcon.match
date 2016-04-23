@@ -61,8 +61,7 @@ only_bool(
 );
 
 a = pmatch_invoke(1,
-  [](auto x) -> std::enable_if_t<std::is_pointer<decltype(x)>::value> {
-  },
+  type_<int*>(),
   [a](int) { return a; },
   [](auto x) { static_assert(!sizeof(x), ""); }
 );
