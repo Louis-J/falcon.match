@@ -62,10 +62,6 @@ only_bool(
 
 a = pmatch_invoke(1,
   [](auto x) -> std::enable_if_t<std::is_pointer<decltype(x)>::value> {
-#ifndef _MSC_VER
-    static_assert(!sizeof(x), "");
-#endif
-    return x; // msvc
   },
   [a](int) { return a; },
   [](auto x) { static_assert(!sizeof(x), ""); }
