@@ -10,7 +10,7 @@ std::true_type normalize_branch_value(my_true_type) { return {}; }
 
 template<class T, int i> struct Fi { i_<i> operator()(T) const { return {}; } };
 
-template<class T> struct type_ {
+template<class T> struct only {
   template<class U>
   std::enable_if_t<std::is_same<std::decay_t<U>, T>::value, std::true_type>
   operator()(U const &) const { return {}; }
@@ -26,8 +26,8 @@ i_<2> b;
 Fi<int, 1> fa;
 Fi<int, 2> fb;
 
-type_<int> only_int;
-type_<bool> only_bool;
+only<int> only_int;
+only<bool> only_bool;
 
 std::true_type true_;
 std::false_type false_;
@@ -61,7 +61,7 @@ only_bool(
 );
 
 a = pmatch_invoke(1,
-  type_<int*>(),
+  only<int*>{},
   [a](int) { return a; },
   [](auto x) { static_assert(!sizeof(x), ""); }
 );
